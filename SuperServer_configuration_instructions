@@ -1,0 +1,264 @@
+Upon receiving the node, CentOS 8 was installed. They probably used the command
+sudo dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
+
+As root:
+Change default password
+    passwd
+Add new user
+    adduser trose
+Add trose to sudoers
+    usermod -aG wheel trose
+Change trose password
+    passwd trose
+
+Physically insert the additional M.2 drive.
+Create directory for new M.2 SSD to mount to.
+    mkdir nvme1n1_2TB_M2_mountpoint
+Format M.2 drive to be xfs
+    mkfs -t xfs -f /dev/nvme1n1
+Mount M.2 drive
+    mount /dev/nvme1n1 /home/trose/nvme1n1_2TB_M2_mountpoint
+Allow trose to access the directory
+    chown -R trose:trose /home/trose/nvme1n1_2TB_M2_mountpoint
+Get the UUID of M.2 drive
+    blkid /dev/nvme1n1
+Paste the following line at the bottom of /etc/fstab (substitute the actual UUID)
+UUID=591f8f3d-0a97-4ba1-8dde-ea457c63ad82 /home/trose/nvme1n1_2TB_M2_mountpoint xfs defaults 0 0
+
+Physically insert the additional U.2 drive.
+Create directory for new U.2 SSD to mount to.
+    mkdir nvme2n1_2TB_U2_mountpoint
+Format U.2 drive to be xfs
+    mkfs -t xfs -f /dev/nvme2n1
+Mount U.2 drive
+    mount /dev/nvme2n1 /home/trose/nvme2n1_2TB_U2_mountpoint
+Allow trose to access the directory
+    chown -R trose:trose /home/trose/nvme2n1_2TB_U2_mountpoint
+Get the UUID of U.2 drive
+    blkid /dev/nvme2n1
+Paste the following line at the bottom of /etc/fstab (substitute the actual UUID)
+UUID=1f80bd34-0d85-4762-89f0-d9e200654591 /home/trose/nvme2n1_2TB_U2_mountpoint xfs defaults 0 0
+
+As trose:
+Change hostname to node0
+    sudo hostnamectl node0 --static
+    sudo hostnamectl set-hostname node0 --static
+    sudo hostnamectl set-hostname node0 --transient
+    sudo hostnamectl set-hostname node0 --pretty
+    sudo reboot
+Install Development Tools
+    sudo dnf group install "Development Tools"
+Install gcc-gfortran
+    sudo yum install gcc-gfortran
+Install mpich-devel
+    sudo yum install mpich-devel
+
+Create SSH keys
+    ssh-keygen -t rsa -b 4096 -C "sshkey_node0"
+Paste the contents of ~/.ssh/id_rsa.pub into node1's .ssh/authorized_keys file (create the file if necessary)
+Paste the contents of node1's .ssh/id_rsa.pub into node0's .ssh/authorized_keys file (create the file if necessary)
+
+As root:
+Now, set the IP address of each node to be static:
+First, we note that the contents of /etc/resolv.conf show the router IP address:
+nameserver 192.168.0.1
+
+root@node0 ~]# ifconfig -a
+eno1: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 192.168.0.114  netmask 255.255.255.0  broadcast 192.168.0.255
+        inet6 fe80::3eec:efff:fe6e:ff96  prefixlen 64  scopeid 0x20<link>
+        ether 3c:ec:ef:6e:ff:96  txqueuelen 1000  (Ethernet)
+        RX packets 4281  bytes 660867 (645.3 KiB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 629  bytes 84439 (82.4 KiB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+eno2: flags=4099<UP,BROADCAST,MULTICAST>  mtu 1500
+        ether 3c:ec:ef:6e:ff:97  txqueuelen 1000  (Ethernet)
+        RX packets 0  bytes 0 (0.0 B)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 0  bytes 0 (0.0 B)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+enp68s0f3u1u2c2: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        ether b0:3a:f2:b6:05:9f  txqueuelen 1000  (Ethernet)
+        RX packets 0  bytes 0 (0.0 B)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 0  bytes 0 (0.0 B)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
+        inet 127.0.0.1  netmask 255.0.0.0
+        inet6 ::1  prefixlen 128  scopeid 0x10<host>
+        loop  txqueuelen 1000  (Local Loopback)
+        RX packets 0  bytes 0 (0.0 B)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 0  bytes 0 (0.0 B)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+shows eno1 is network interface name because 192.168.0.114 (the default dhcp address assigned to node0) and we also see the network mask is 255.255.255.0
+
+In /etc/sysconfig/network-scripts/ifcfg-eno1, I put
+
+TYPE=Ethernet
+PROXY_METHOD=none
+BROWSER_ONLY=no
+BOOTPROTO=static
+DEFROUTE=yes
+IPV4_FAILURE_FATAL=no
+IPV6INIT=yes
+IPV6_AUTOCONF=yes
+IPV6_DEFROUTE=yes
+IPV6_FAILURE_FATAL=no
+NAME=eno1
+UUID=a9e6f0ce-6b81-4f45-bf38-46050f61f6f4
+DEVICE=eno1
+ONBOOT=yes
+IPADDR=192.168.0.200
+GATEWAY=192.168.0.1
+HOSTNAME=node0
+NETMASK=255.255.255.0
+
+The BOOTPROTO was changed to static, the IPADDR, GATEWAY, HOSTNAME, and NETMASK lines were added.
+Rebooted node0, then did a similar procedure for node1 which will have address 192.168.0.201.
+
+As trose:
+Stop firewalld to allow each node to easily access each other
+    sudo systemctl stop firewalld
+Restart the SSH service
+    sudo systemctl restart sshd
+Add the following 2 lines to /etc/hosts
+    sudo vi /etc/hosts
+192.168.0.200         node0
+192.168.0.201         node1
+
+Edit /home/trose/.ssh/known_hosts to be
+192.168.0.200 ecdsa-sha2-nistp256 AAAAE2VjZH etc. etc.=
+192.168.0.201 ecdsa-sha2-nistp256 AAAAE2VjZHN etc. etc.=
+node0 ecdsa-sha2-nistp256 AAAAE2VjZH etc. etc.=
+node1 ecdsa-sha2-nistp256 AAAAE2VjZHN etc. etc.=
+
+Restart the SSH service
+    sudo systemctl restart sshd
+
+Installing python
+as trose:
+    cd ~/
+    mkdir anaconda
+    cd anaconda
+    wget https://repo.anaconda.com/archive/Anaconda3-2021.11-Linux-x86_64.sh
+    chmod +x Anaconda3-2021.11-Linux-x86_64.sh
+    ./Anaconda3-2021.11-Linux-x86_64.sh
+I did not initialze conda (said no).
+
+Append the following lines to ~/.bashrc
+
+pyenv=/home/trose/anaconda/anaconda3
+export pyenv
+PATH=/usr/lib64/mpich/bin:/usr/bin:$pyenv/bin:$PATH
+LD_LIBRARY_PATH=/usr/lib64/mpich/lib:/lib64:/usr/lib64:$pyenv/lib:$LD_LIBRARY_PATH
+PYTHONPATH=$pyenv"/lib/python3.9/site-packages"
+export PATH
+export LD_LIBRARY_PATH
+export PYTHONPATH
+
+Run these lines or reboot system.
+
+Create a python environment:
+    conda create -n py_env0 python=3 anaconda
+
+Modify ~/.bashrc lines to the following:
+
+pyenv=/home/trose/anaconda/anaconda3/envs/py_env0
+export pyenv
+PATH=/usr/lib64/mpich/bin:/usr/bin:$pyenv/bin:$PATH
+LD_LIBRARY_PATH=/usr/lib64/mpich/lib:/lib64:/usr/lib64:$pyenv/lib:$LD_LIBRARY_PATH
+PYTHONPATH=$pyenv"/lib/python3.9/site-packages"
+export PATH
+export LD_LIBRARY_PATH
+export PYTHONPATH
+
+Run these lines or reboot system.
+
+Install mpi4py:
+    conda install -c conda-forge mpi4py mpich
+Test mpi4py:
+    mkdir ~/test
+    mkdir ~/test/mpi4py_test
+    cd ~/test/mpi4py_test
+
+Put the following file in ~/test/mpi4py_test called hello_mpi.py:
+
+from mpi4py import MPI
+import socket
+comm = MPI.COMM_WORLD
+print('comm.size', comm.size)
+print('hi from rank', comm.rank, 'on host', socket.gethostname())
+shared = (comm.rank + 1) * 5
+if comm.rank == 0:
+    data = shared
+    comm.send(data, dest=1)
+    print('rank', comm.rank, 'sent', data)
+elif comm.rank == 1:
+    data = comm.recv(source=0)
+    print('rank', comm.rank, 'received', data)
+if comm.rank == 0:
+    data = {'a':1,'b':2,'c':3}
+else:
+    data = None
+data = comm.bcast(data, root=0)
+print('rank', comm.rank, 'got bcast', data)
+if comm.rank == 0:
+    data = [(x+1)**x for x in range(comm.size)]
+    print('rank 0 will be scattering:', data)
+else:
+    data = None
+data = comm.scatter(data, root=0)
+print('rank', comm.rank, 'has data', data)
+newData = comm.gather(data, root=0)
+if comm.rank == 0:
+    print('rank 0 has newData', newData)
+
+Put the following file in ~/test/mpi4py_test called hostfile:
+
+node0
+
+Now run a 2-process test:
+    mpiexec -f hostfile -n 2 python hello_mpi.py
+
+Now add a line to the hostfile so it now reads
+
+node0
+node1
+
+Now I had to make sure the mpiexec version was the same on node1. Run the following on node0 and on node1
+    mpiexec --version
+
+It was different for node1, so on node1 I tried sudo yum update mpich-devel but it had an error saying
+Error: Failed to download metadata for repo ... Cannot prepare internal mirrorlist
+At https://stackoverflow.com/questions/70963985/error-failed-to-download-metadata-for-repo-appstream-cannot-prepare-internal
+I saw I needed gpg keys so I did
+    cd ~/
+    mkdir gpg_keys
+    cd gpg_keys
+    wget 'http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os/Packages/centos-gpg-keys-8-3.el8.noarch.rpm'
+    sudo rpm -i 'centos-gpg-keys-8-3.el8.noarch.rpm'
+    sudo dnf --disablerepo '*' --enablerepo=extras swap centos-linux-repos centos-stream-repos
+    sudo dnf distro-sync
+
+A comment said "One has to first remove all packages from the PowerTools repo before distro-sync, which are being duplicated. Some of mirror.centos.org seems to be vault.centos.org (archived) now." However, I did not remove packages from PowerTools before distro-sync because I was not sure if that was the right thing to do.
+
+Then I did (still on node1)
+
+    sudo yum install mpich-devel
+
+Then I changed pyenv to pyenv=/home/trose/anaconda/anaconda3 in ~/.bashrc and logged out and logged back in to node1.
+Each time I log in to either node I run
+    sudo systemctl stop firewalld
+    sudo systemctl restart sshd
+Then I did
+    conda create -n py_env0 python=3 anaconda
+    conda install -c conda-forge mpi4py mpich
+Then the following worked
+    cd cd test/mpi4py_test
+    mpiexec -f hostfile -n 4 python hello_mpi.py
